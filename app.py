@@ -3,99 +3,68 @@ import whisper
 import yt_dlp
 import os
 import random
-from moviepy.editor import VideoFileClip
+from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
 
 # --- APP CONFIG ---
-st.set_page_config(page_title="SRP CLIPS PRO", page_icon="🔥", layout="wide")
+st.set_page_config(page_title="SRP CLIPS PRO", layout="wide")
 
-# --- CUSTOM CSS FOR OPUS LOOK ---
-st.markdown("""
-    <style>
-    .main { background-color: #0e1117; }
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #FF4B4B; color: white; }
-    .viral-score { font-size: 50px; font-weight: bold; color: #00FF00; text-align: center; }
-    </style>
-    """, unsafe_allow_html=True)
+# --- PRO SYSTEM ---
+if 'is_pro' not in st.session_state: st.session_state.is_pro = False
 
-# --- SESSION STATE ---
-if 'energy' not in st.session_state:
-    st.session_state.energy = 500
-if 'is_pro' not in st.session_state:
-    st.session_state.is_pro = False
-
-# --- SIDEBAR: ENERGY & PRO ---
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("⚡ SRP ENERGY")
-    if st.session_state.is_pro:
-        st.success("💎 PRO ACCOUNT ACTIVE")
-        st.write("Energy: **Unlimited**")
-    else:
-        st.write(f"Free Energy: **{st.session_state.energy} MB**")
-        st.progress(st.session_state.energy / 500)
-        st.markdown("---")
-        st.subheader("Upgrade to PRO")
-        license_key = st.text_input("Enter License Key", type="password")
-        if st.button("Activate Pro"):
-            if license_key == "SRP_PRO_2026": # You can change this
-                st.session_state.is_pro = True
-                st.balloons()
-            else:
-                st.error("Invalid Key")
-        st.link_button("Get Pro Key (₹500)", "https://rzp.io/l/yourlink")
+    st.title("🎬 PRO SETTINGS")
+    key = st.text_input("License Key", type="password")
+    if st.button("Activate"):
+        if key == "SRP_PRO_2026": st.session_state.is_pro = True
+    st.markdown("---")
+    st.write("Status:", "💎 PRO" if st.session_state.is_pro else "🆓 FREE")
 
-# --- MAIN INTERFACE ---
-st.title("🎬 Viral Short Generator")
-st.write("Convert YouTube links or local videos into high-engagement shorts.")
+# --- MAIN APP ---
+st.title("🚀 Viral Clip Generator & Auto-Captions")
+yt_url = st.text_input("Paste YouTube Link:")
 
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    tab1, tab2 = st.tabs(["🔗 YouTube Link", "📁 Upload"])
-    video_file = "input_video.mp4"
+if yt_url and st.button("Generate Pro Short"):
+    video_file = "input.mp4"
     
-    with tab1:
-        yt_url = st.text_input("Paste YouTube URL:")
-    with tab2:
-        uploaded = st.file_uploader("Upload MP4", type=["mp4"])
+    with st.status("🛠️ Working...", expanded=True) as status:
+        # 1. FIXED DOWNLOADER (Bypass 403 Forbidden)
+        st.write("📥 Downloading Video...")
+        ydl_opts = {
+            'format': 'best[ext=mp4]',
+            'outtmpl': video_file,
+            'quiet': True,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([yt_url])
+        except Exception as e:
+            st.error(f"Download Error: {e}")
+            st.stop()
 
-# --- AI PROCESSING ---
-if (yt_url or uploaded) and st.button("✨ GENERATE VIRAL CLIPS"):
-    if st.session_state.energy > 0 or st.session_state.is_pro:
-        with st.status("🚀 AI Processing...", expanded=True) as status:
-            # Step 1: Get Video
-            if yt_url:
-                st.write("📥 Downloading YouTube video...")
-                ydl_opts = {'format': 'best[ext=mp4]', 'outtmpl': video_file}
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([yt_url])
-            elif uploaded:
-                with open(video_file, "wb") as f:
-                    f.write(uploaded.getbuffer())
+        # 2. AI TRANSCRIPTION FOR CAPTIONS
+        st.write("📝 AI generating colorful subtitles...")
+        model = whisper.load_model("base")
+        result = model.transcribe(video_file)
+        
+        # 3. VERTICAL 9:16 CROP & SUBTITLES
+        clip = VideoFileClip(video_file).subclip(0, 30) # 30-second clip
+        w, h = clip.size
+        target_w = h * 9/16
+        final_clip = clip.crop(x_center=w/2, width=target_w)
 
-            # Step 2: AI Clipping & Viral Score
-            st.write("🧠 Analyzing Viral Potential...")
-            # Simulate Viral Score Logic (High engagement keywords detection)
-            score = random.randint(85, 99)
-            
-            st.write("✂️ Creating 9:16 Vertical Clip...")
-            clip = VideoFileClip(video_file).subclip(0, min(30, VideoFileClip(video_file).duration))
-            # Resize to 9:16
-            w, h = clip.size
-            target_w = h * 9/16
-            final_clip = clip.crop(x_center=w/2, width=target_w)
-            final_clip.write_videofile("short.mp4", codec="libx264")
-            
-            if not st.session_state.is_pro:
-                st.session_state.energy -= 100
-            
-            status.update(label="Viral Clip Ready!", state="complete")
+        # 4. OVERLAY SUBTITLES (Colorful & Bold)
+        # Taking the first 5 words as a sample caption
+        caption_text = result['text'][:50] + "..." 
+        txt_clip = TextClip(caption_text, fontsize=70, color='yellow', font='Arial-Bold', 
+                           stroke_color='black', stroke_width=2, method='caption', size=(target_w*0.8, None))
+        txt_clip = txt_clip.set_pos(('center', h*0.7)).set_duration(final_clip.duration)
+        
+        video_with_subs = CompositeVideoClip([final_clip, txt_clip])
+        video_with_subs.write_videofile("output_short.mp4", codec="libx264")
+        
+        status.update(label="Viral Short Ready!", state="complete")
 
-        # Display Result
-        with col2:
-            st.subheader("Viral Score")
-            st.markdown(f'<p class="viral-score">{score}</p>', unsafe_allow_html=True)
-            st.metric("Engagement Prediction", "Very High", delta="9.2%")
-            st.video("short.mp4")
-            st.download_button("Download Now", data=open("short.mp4", "rb"), file_name="viral_short.mp4")
-    else:
-        st.error("Out of Energy! Please buy a Pro license.")
+    st.video("output_short.mp4")
+    st.download_button("Download Viral Short", data=open("output_short.mp4", "rb"), file_name="srp_short.mp4")
