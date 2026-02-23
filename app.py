@@ -1,49 +1,31 @@
 import streamlit as st
-import yt_dlp
 from moviepy.editor import VideoFileClip
 import os
 
 st.set_page_config(page_title="SRP CLIPS AI", layout="wide")
 st.title("🎬 SRP AI Viral Short Generator")
 
-def download_video(url):
-    ydl_opts = {
-        'format': 'best',
-        'outtmpl': 'input.mp4',
-        'quiet': True
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-    return "input.mp4"
+st.info("⚠️ Upload video directly. YouTube links are blocked on cloud servers.")
 
-option = st.radio("Choose Input:", ["YouTube Link", "Upload Video"])
-video_file = None
+uploaded = st.file_uploader("Upload MP4 Video", type=["mp4"])
 
-if option == "YouTube Link":
-    url = st.text_input("Paste YouTube URL")
-    if url and st.button("Download"):
+if uploaded:
+    with open("input.mp4", "wb") as f:
+        f.write(uploaded.read())
+
+    if st.button("Generate 30s Vertical Short"):
         try:
-            video_file = download_video(url)
-        except:
-            st.error("YouTube blocked cloud server. Use Upload option.")
-else:
-    uploaded = st.file_uploader("Upload MP4", type=["mp4"])
-    if uploaded:
-        with open("input.mp4", "wb") as f:
-            f.write(uploaded.read())
-        video_file = "input.mp4"
+            clip = VideoFileClip("input.mp4").subclip(0, 30)
+            w, h = clip.size
+            vertical = clip.crop(x_center=w/2, width=h*9/16)
 
-if video_file and st.button("Generate 30s Vertical Short"):
-    try:
-        clip = VideoFileClip(video_file).subclip(0, 30)
-        w, h = clip.size
-        vertical = clip.crop(x_center=w/2, width=h*9/16)
-        vertical.write_videofile("short.mp4", codec="libx264", audio_codec="aac")
+            vertical.write_videofile("short.mp4", codec="libx264", audio_codec="aac")
 
-        st.success("Done!")
-        st.video("short.mp4")
+            st.success("Short Created!")
+            st.video("short.mp4")
 
-        with open("short.mp4", "rb") as f:
-            st.download_button("Download Short", f, "srp_short.mp4")
-    except Exception as e:
-        st.error(str(e))
+            with open("short.mp4", "rb") as f:
+                st.download_button("Download Short", f, "srp_short.mp4")
+
+        except Exception as e:
+            st.error(str(e))
