@@ -1,31 +1,25 @@
-import streamlit as st
-from moviepy.editor import VideoFileClip
+from flask import Flask, render_template, request, send_file
+from downloader import download_video
+from processor import create_vertical_short
 import os
 
-st.set_page_config(page_title="SRP CLIPS AI", layout="wide")
-st.title("🎬 SRP AI Viral Short Generator")
+app = Flask(__name__)
 
-st.info("⚠️ Upload video directly. YouTube links are blocked on cloud servers.")
-
-uploaded = st.file_uploader("Upload MP4 Video", type=["mp4"])
-
-if uploaded:
-    with open("input.mp4", "wb") as f:
-        f.write(uploaded.read())
-
-    if st.button("Generate 30s Vertical Short"):
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if request.method == "POST":
+        url = request.form.get("url")
         try:
-            clip = VideoFileClip("input.mp4").subclip(0, 30)
-            w, h = clip.size
-            vertical = clip.crop(x_center=w/2, width=h*9/16)
-
-            vertical.write_videofile("short.mp4", codec="libx264", audio_codec="aac")
-
-            st.success("Short Created!")
-            st.video("short.mp4")
-
-            with open("short.mp4", "rb") as f:
-                st.download_button("Download Short", f, "srp_short.mp4")
-
+            video = download_video(url)
+            output = create_vertical_short(video)
+            return render_template("index.html", video_ready=True)
         except Exception as e:
-            st.error(str(e))
+            return f"Error: {e}"
+    return render_template("index.html", video_ready=False)
+
+@app.route("/download")
+def download():
+    return send_file("static/output.mp4", as_attachment=True)
+
+if __name__ == "__main__":
+    app.run(debug=True)
