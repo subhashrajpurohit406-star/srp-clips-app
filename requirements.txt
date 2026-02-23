@@ -1,7 +1,7 @@
 streamlit
-yt-dlp>=2026.01.29
-moviepy==1.0.3
-openai-whisper
-torch
+yt-dlp
+moviepy
+imageio
+imageio-ffmpeg
 numpy
 Pillow
